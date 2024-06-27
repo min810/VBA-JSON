@@ -1,0 +1,57 @@
+#If VBA7 Then
+    Private Declare PtrSafe Function CryptAcquireContext Lib "advapi32.dll" Alias "CryptAcquireContextA" (phProv As LongPtr, ByVal pszContainer As String, ByVal pszProvider As String, ByVal dwProvType As Long, ByVal dwFlags As Long) As Long
+    Private Declare PtrSafe Function CryptCreateHash Lib "advapi32.dll" (ByVal hProv As LongPtr, ByVal Algid As Long, ByVal hKey As LongPtr, ByVal dwFlags As Long, phHash As LongPtr) As Long
+    Private Declare PtrSafe Function CryptHashData Lib "advapi32.dll" (ByVal hHash As LongPtr, pbData As Any, ByVal dwDataLen As Long, ByVal dwFlags As Long) As Long
+    Private Declare PtrSafe Function CryptGetHashParam Lib "advapi32.dll" (ByVal hHash As LongPtr, ByVal dwParam As Long, pbData As Any, pdwDataLen As Long, ByVal dwFlags As Long) As Long
+    Private Declare PtrSafe Function CryptDestroyHash Lib "advapi32.dll" (ByVal hHash As LongPtr) As Long
+    Private Declare PtrSafe Function CryptReleaseContext Lib "advapi32.dll" (ByVal hProv As LongPtr, ByVal dwFlags As Long) As Long
+#Else
+    Private Declare Function CryptAcquireContext Lib "advapi32.dll" Alias "CryptAcquireContextA" (phProv As Long, ByVal pszContainer As String, ByVal pszProvider As String, ByVal dwProvType As Long, ByVal dwFlags As Long) As Long
+    Private Declare Function CryptCreateHash Lib "advapi32.dll" (ByVal hProv As Long, ByVal Algid As Long, ByVal hKey As Long, ByVal dwFlags As Long, phHash As Long) As Long
+    Private Declare Function CryptHashData Lib "advapi32.dll" (ByVal hHash As Long, pbData As Any, ByVal dwDataLen As Long, ByVal dwFlags As Long) As Long
+    Private Declare Function CryptGetHashParam Lib "advapi32.dll" (ByVal hHash As Long, ByVal dwParam As Long, pbData As Any, pdwDataLen As Long, ByVal dwFlags As Long) As Long
+    Private Declare Function CryptDestroyHash Lib "advapi32.dll" (ByVal hHash As Long) As Long
+    Private Declare Function CryptReleaseContext Lib "advapi32.dll" (ByVal hProv As Long, ByVal dwFlags As Long) As Long
+#End If
+
+Const PROV_RSA_FULL = 1
+Const CRYPT_VERIFYCONTEXT = &HF0000000
+Const CALG_SHA_256 = &H800C
+Const HP_HASHVAL = &H2
+
+Function HMAC_SHA256(key As String, data As String) As String
+    Dim hProv As LongPtr
+    Dim hHash As LongPtr
+    Dim cbHash As Long
+    Dim hash() As Byte
+    Dim i As Long
+
+    ' Acquire a cryptographic provider context handle.
+    If CryptAcquireContext(hProv, vbNullString, vbNullString, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) = 0 Then
+        Exit Function
+    End If
+
+    ' Create an HMAC hash object.
+    If CryptCreateHash(hProv, CALG_SHA_256, 0, 0, hHash) = 0 Then
+        CryptReleaseContext hProv, 0
+        Exit Function
+    End If
+
+    ' Hash the key and data.
+    CryptHashData hHash, ByVal StrPtr(key), LenB(key), 0
+    CryptHashData hHash, ByVal StrPtr(data), LenB(data), 0
+
+    ' Get the hash value.
+    cbHash = 32 ' SHA-256 produces a 256-bit hash (32 bytes).
+    ReDim hash(cbHash - 1)
+    CryptGetHashParam hHash, HP_HASHVAL, hash(0), cbHash, 0
+
+    ' Convert the hash to a hexadecimal string.
+    For i = 0 To cbHash - 1
+        HMAC_SHA256 = HMAC_SHA256 & LCase(Right("00" & Hex(hash(i)), 2)))
+    Next i
+
+    ' Destroy the hash object and release the provider context handle.
+    CryptDestroyHash hHash
+    CryptReleaseContext hProv, 0
+End Function
